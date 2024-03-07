@@ -19,3 +19,4 @@ run-server: $(SERVER_TARGET)
 
 clean:
 	rm -f $(CLIENT_TARGET) $(SERVER_TARGET)
+	clear

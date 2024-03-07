@@ -18,12 +18,17 @@ int main()
         return 1;
     }
 
+    if(setsockopt(server_socket, IPPROTO_IPV6, IPV6_V6ONLY, &(int){0}, sizeof(int)) == -1) {
+        printf("Setsockopt failed\n");
+        return 1;
+    }
+
     struct sockaddr_in6 server_address;
     server_address.sin6_family = AF_INET6;
     server_address.sin6_port = htons(PORTAS);
-    inet_pton(AF_INET6, "::1", &(server_address.sin6_addr));
+    server_address.sin6_addr = in6addr_any;
 
-    if (bind(server_socket, (struct sockaddr *) &server_address, sizeof(server_address)) == -1) {
+    if (bind(server_socket, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
         printf("Binding failed\n");
         return 1;
     }
