@@ -1,22 +1,19 @@
 CFLAGS = -Wall -Wextra
 
-CLIENT_TARGET = client
-SERVER_TARGET = server
+all: client1 client2 server1 server2
 
-all: $(CLIENT_TARGET) $(SERVER_TARGET)
+client1: client1.c
+	gcc $(CFLAGS) -o client1 client1.c -lpthread
 
-$(CLIENT_TARGET): client.c
-	$(CC) $(CFLAGS) -o $(CLIENT_TARGET) client.c
+client2: client2.c
+	gcc $(CFLAGS) -o client2 client2.c -lpthread
 
-$(SERVER_TARGET): server.c
-	$(CC) $(CFLAGS) -o $(SERVER_TARGET) server.c
+server1: server1.c
+	gcc $(CFLAGS) -o server1 server1.c -lpthread
 
-run-client: $(CLIENT_TARGET)
-	./$(CLIENT_TARGET)
-
-run-server: $(SERVER_TARGET)
-	./$(SERVER_TARGET)
+server2: server2.c
+	gcc $(CFLAGS) -o server2 server2.c -lpthread
 
 clean:
-	rm -f $(CLIENT_TARGET) $(SERVER_TARGET)
+	rm -f client1 client2 server1 server2
 	clear
