@@ -1,0 +1,12 @@
+CREATE TABLE questions (
+    id SERIAL PRIMARY KEY,
+    question TEXT NOT NULL,
+    time_asked TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE answers (
+    id SERIAL PRIMARY KEY,
+    answer TEXT NOT NULL,
+    question_id INTEGER REFERENCES questions(id),
+    username TEXT NOT NULL
+);

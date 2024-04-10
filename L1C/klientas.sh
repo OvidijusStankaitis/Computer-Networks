@@ -1,7 +1,6 @@
 #!/bin/bash
 
 if [ "$1" == "run" ]; then
-    clear
     javac PokalbiuKlientas.java
     java PokalbiuKlientas 20000
     clear
