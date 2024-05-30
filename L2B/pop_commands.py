@@ -1,56 +1,133 @@
+import os
+import email
 from email.parser import Parser
-import time
+from email.policy import default
+import re
 
-def handle_retr_command(server):
-    input_msg_num = input("Enter message number to retrieve: ").strip()
+keyword = "KOMPASGOOD"
+secret_contacts = ['kompiuteriskompiuteriskis@gmail.com', 'ovidijus.stankaitis@mif.stud.vu.lt']
 
-    if not input_msg_num.isdigit() or int(input_msg_num) < 1:
-        print("Error: Invalid message number entered.")
-        return 
+def extract_email(sender):
+    """Extract email address from sender string."""
+    match = re.search(r'<([^>]+)>', sender)
+    if match:
+        return match.group(1)
+    return sender  # Return the original string if no email format found
 
-    msg_num = int(input_msg_num)
+def send(server, message):
+    """ Send a message to the server. """
+    server.sendall(message.encode())
 
-    lines = server.retr(msg_num)[1]
-    msg_data = b"\n".join(lines).decode('utf-8')  
-    msg = Parser().parsestr(msg_data)  
-
-    if msg.is_multipart():
-        for part in msg.walk():
-            if part.get_content_type() == 'text/plain':
-                print("Email content:\n", part.get_payload(decode=True).decode('utf-8'))
-    else:
-        print("Email content:\n", msg.get_payload(decode=True).decode('utf-8'))
-
-def handle_list_command(server):
-    msg_number = input("Enter message number or leave blank for all messages: ").strip()
-    if msg_number:
-        msg_number = int(msg_number)
-        listing = server.list(msg_number)
-        print("Scan listing for message {0}: {1}".format(msg_number, listing.decode('utf-8')))
-    else:
-        listings = server.list()[1]
-        print("Total messages: {0}".format(len(listings)))
-        number = 1
-        for listing in listings:
-            print("Scan listing for message {0}: {1}".format(number, listing.decode('utf-8')))
-            number += 1
-
-def handle_noop_command(server, condition):
-    with condition:
-        while True:
-            server.noop()
-            if condition.wait(timeout=5): 
-                break
+def recv(server):
+    """ Receive a message from the server. """
+    response = server.recv(4096).decode()
+    print(response)
+    return response
 
 def handle_stat_command(server):
-    message_count, total_size = server.stat()
-    print("Mailbox status: {0} messages, combined size of {1} bytes.".format(message_count, total_size))
+    """ Handle the STAT command which shows the total number of emails and the combined size. """
+    send(server, 'STAT\r\n')
+    return recv(server)
+
+def handle_list_command(server):
+    """ Handle the LIST command which lists all emails or a specific email's size. """
+    email_number = input("Enter email number or press Enter for all emails: ")
+    if email_number.strip():
+        send(server, f'LIST {email_number}\r\n')
+    else:
+        send(server, 'LIST\r\n')
+    return recv(server)
+
+def recv_complete_message(server):
+    """ Receive the complete message until the POP3 end-of-message delimiter '\r\n.\r\n' is found. """
+    response_parts = []
+    while True:
+        part = server.recv(4096).decode()
+        response_parts.append(part)
+        if part.endswith('\r\n.\r\n'):
+            break
+    full_response = ''.join(response_parts)
+    return full_response
+
+def create_cipher_alphabet(keyword):
+    """Create the substitution alphabet based on the keyword."""
+    seen = set()
+    filtered_keyword = ''.join([char for char in keyword.upper() if char not in seen and not seen.add(char)])
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    remaining_letters = ''.join([char for char in alphabet if char not in filtered_keyword])
+    cipher_alphabet = filtered_keyword + remaining_letters
+    return cipher_alphabet
+
+def decrypt_text(text, keyword):
+    """Decrypt text using the substitution cipher."""
+    cipher_alphabet = create_cipher_alphabet(keyword)
+    standard_alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    mapping = dict(zip(cipher_alphabet, standard_alphabet))
+    result = ''
+    for char in text.upper():
+        if char in mapping:
+            result += mapping[char]
+        else:
+            result += char  # Non-alphabetic characters are copied as is
+    return result
+
+def handle_retr_command(server):
+    """Handle the RETR command to retrieve the full content of a specified email."""
+    email_number = input("Enter email number to retrieve: ")
+    send(server, f'RETR {email_number}\r\n')
+    email_content = recv_complete_message(server)
+
+    # Remove the initial server response (+OK)
+    email_content = '\n'.join(email_content.split('\n')[1:])
+
+    # Parse the email content
+    message = email.message_from_string(email_content, policy=default)
+    sender = message.get('From')
+    subject = message.get('Subject')
+    body = ""
+    attachments = []
+
+    if message.is_multipart():
+        for part in message.walk():
+            content_disposition = part.get('Content-Disposition')
+            if part.get_content_type() == 'text/plain' and (content_disposition is None or 'attachment' not in content_disposition):
+                body = part.get_payload(decode=True).decode('utf-8')
+            elif content_disposition and 'attachment' in content_disposition:
+                filename = part.get_filename()
+                file_data = part.get_payload(decode=True)
+                filepath = os.path.join('/home/ovidijus/Desktop/KT/L2B', filename)
+                with open(filepath, 'wb') as f:
+                    f.write(file_data)
+                attachments.append(filepath)
+    else:
+        body = message.get_payload(decode=True).decode('utf-8')
+
+    # Extract email from sender
+    email_address = extract_email(sender)
+    print("\nSender:", email_address)
+    
+    # Check if the email address is in secret contacts
+    if email_address in secret_contacts:
+        subject = decrypt_text(subject, keyword)
+        body = decrypt_text(body, keyword)
+        print("Decrypted Subject:", subject)
+        print("Decrypted Text:", body)
+    else:
+        print("Subject:", subject)
+        print("Text:", body.strip())
+
+    if attachments:
+        print("Attachments saved:", ', '.join(attachments))
+    else:
+        print("No attachments found.")
 
 def handle_dele_command(server):
-    msg_num = int(input("Enter message number to delete: "))
-    server.dele(msg_num)
-    print(f"Message {msg_num} marked for deletion.")
+    """ Handle the DELE command to mark a specified email for deletion. """
+    email_number = input("Enter email number to delete: ")
+    send(server, f'DELE {email_number}\r\n')
+    return recv(server)
 
 def handle_rset_command(server):
-    server.rset()
-    print("Reset state, undeleted all deleted messages.")
+    """ Handle the RSET command to undo any deletions marked during this session. """
+    send(server, 'RSET\r\n')
+    return recv(server)
